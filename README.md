@@ -1,58 +1,387 @@
-# Trabalho final - Containers
+# Trabalho Final — Containers
 
-Você ficou responsável por colocar no ar a aplicação de listagem de livros do Web
-Academy. Foi sugerido que a aplicação funcionasse de maneira flexível e de fácil
-configuração entre ambientes, então você decidiu utilizar o Docker para rodar as aplicações.
-A infraestrutura dessa aplicação consistente em:
+Aplicação de gerenciamento de livros do Web Academy executada com Docker Compose.
 
-- Um servidor de banco de dados MySQL
-- Uma aplicação backend escrita em Node.js com Typescript
-- Uma aplicação frontend escrita em React com Typescript
-- Uma aplicação de gerenciamento de banco de dados, o PHPMyAdmin
+A infraestrutura contém:
 
-Cada aplicação está na sua respectiva pasta. Na pasta de banco de dados, está o script para criação e população do mesmo.
+- banco de dados MySQL;
+- backend em Node.js e TypeScript;
+- frontend em React e TypeScript servido pelo Nginx;
+- PHPMyAdmin para gerenciamento do banco de dados.
 
-## Backend
-Na aplicação backend devemos configurar seu acesso ao banco de dados, porta de acesso
-e demais configurações que ficam descritas no arquivo .env. Algumas informações
-importantes:
-- O Dockerfile do backend já está configurado corretamente
-- A aplicação backend deverá executar na porta de rede 4444 e mapeada para a porta
-4444 do servidor externo
-- Deverá ser configurado um volume para salvar os arquivos de log gerados pela
-aplicação, que ficarão armazenados na pasta /log dentro da aplicação
+## Arquitetura
 
-## Frontend
-Na aplicação frontend não será necessário modificar o arquivo .env, no entanto o mesmo
-deverá ser capaz de acessar o backend nas configurações definidas. Algumas informações
-importantes:
-- O Dockerfile do frontend já está configurado corretamente
-- A aplicação está executando dentro de um servidor Nginx, ou seja, dentro do
-contêiner a aplicação está rodando na porta de rede 80. Dessa forma, deverá ser
-mapeada a porta 8000 no servidor externo
+| Serviço        | Porta no contêiner | Porta externa |
+| -------------- | -----------------: | ------------: |
+| MySQL          |               3306 |          3306 |
+| Backend        |               4444 |          4444 |
+| Frontend/Nginx |                 80 |          8000 |
+| PHPMyAdmin     |                 80 |          8080 |
 
-## Banco de Dados
-O banco de dados utilizado pela aplicação é o MySQL. Algumas informações importantes:
-- As credenciais de autenticação do servidor podem ser configuradas da forma que
-achar melhor
-- O servidor deverá executar na porta de rede 3306 no contêiner e mapeada para a
-porta 3306 do servidor externo
-- Deverá ser configurado um volume para salvar os arquivos gerados pelo MySQL
+O backend acessa o banco pelo hostname `mysql`, que corresponde ao nome do serviço definido no Docker Compose.
 
-## Entregáveis
-Instruções para execução dos contêineres da aplicação, junto com as aplicações
-configuradas. Obs.: Evite enviar as aplicações com diretórios e arquivos contidos no arquivo
-.gitignore (principalmente a pasta node_modules)
+## Pré-requisitos
 
-## Modo de entrega
-Crie um repositório privado no Github e adicione o
-meu perfil como contribuidor no repositório (https://github.com/matiusX).
+- Docker Engine;
+- Docker Compose;
+- portas `3306`, `4444`, `8000` e `8080` disponíveis.
 
-## Modo de avaliação
- - Irei seguir as instruções de execução dos contêineres e tentar utilizar as funcionalidades
-disponíveis no frontend. Irei desligar os contêineres, apagá-los e recriá-los para verificação
-das configurações de volumes corretamente. O mapeamento de portas de rede deve estar
-de acordo com a definição da especificação do trabalho.
- - No dia após a entrega, enviarei uma lista com todos os repositórios que recebi. Se o seu não estiver lá, entre em contato comigo.
- - Ao final da correção, será publicada a correção em um arquivo CORRECAO.md dentro do
-repositório, com as considerações feitas durante a correção do trabalho.
+Verificação de portas:
+
+```bash
+sudo ss -ltnp | grep -E ':(3306|4444|8000|8080)\b' || true
+```
+
+Caso exista um MySQL local ocupando a porta `3306`, no Ubuntu ele pode ser interrompido com:
+
+```bash
+sudo systemctl stop mysql
+```
+
+Para iniciar novamente:
+
+```bash
+sudo systemctl start mysql
+```
+
+## Execução
+
+Clone o repositório:
+
+```bash
+git clone https://github.com/matiusX/tp-final-webacademy.git
+cd tp-final-webacademy
+```
+
+Construir as imagens e iniciar os serviços:
+
+```bash
+docker compose up -d --build
+```
+
+Conferir estado:
+
+```bash
+docker compose ps
+```
+
+O MySQL deve aparecer com o estado `healthy`.
+
+## Acessos
+
+### Frontend
+
+```text
+http://localhost:8000
+```
+
+### Backend
+
+```text
+http://localhost:4444/api
+```
+
+Listagem de livros:
+
+```text
+http://localhost:4444/api/livros
+```
+
+### PHPMyAdmin
+
+```text
+http://localhost:8080
+```
+
+Credenciais:
+
+```text
+Servidor: mysql
+Usuário: root
+Senha: senhasegura
+Banco: livraria
+```
+
+### MySQL
+
+```text
+Host: localhost
+Porta: 3306
+Usuário: root
+Senha: senhasegura
+Banco: livraria
+```
+
+## Configurações do backend
+
+O arquivo `backend/.env` contém:
+
+```env
+ESCREVER_LOG_ARQUIVO=true
+PORTA=4444
+DATABASE_URL="mysql://root:senhasegura@mysql:3306/livraria"
+```
+
+Os arquivos de log são armazenados em:
+
+```text
+/app/log
+```
+
+Esse diretório está associado ao volume persistente `backend_logs`.
+
+## Configurações do frontend
+
+O arquivo `frontend/.env` contém:
+
+```env
+VITE_ROTA_LIVROS=http://localhost:4444/api/livros
+VITE_ROTA_INFOS_API=http://localhost:4444/api
+VITE_API_BASE_URL=http://localhost:4444/api
+```
+
+As variáveis são aplicadas durante a construção da aplicação React.
+
+## Inicialização do banco
+
+Na primeira execução, o MySQL executa automaticamente:
+
+```text
+bd/script.sql
+bd/02-dados.sql
+```
+
+O primeiro arquivo cria a tabela `livros`. O segundo insere os seis livros iniciais.
+
+Para consultar a quantidade de livros:
+
+```bash
+docker compose exec mysql \
+  mysql -uroot -psenhasegura -D livraria \
+  -e "SELECT COUNT(*) AS total_livros FROM livros;"
+```
+
+Para listar os livros com codificação UTF-8:
+
+```bash
+docker compose exec mysql \
+  mysql --default-character-set=utf8mb4 \
+  -uroot -psenhasegura -D livraria \
+  -e "SELECT isbn, nome FROM livros;"
+```
+
+## Volumes
+
+O projeto utiliza dois volumes:
+
+```text
+mysql_data
+backend_logs
+```
+
+O volume `mysql_data` armazena os arquivos do MySQL em:
+
+```text
+/var/lib/mysql
+```
+
+O volume `backend_logs` armazena os logs do backend em:
+
+```text
+/app/log
+```
+
+Para conferir os volumes:
+
+```bash
+docker volume ls | grep tp-final-webacademy
+```
+
+## Logs
+
+Todos os serviços:
+
+```bash
+docker compose logs
+```
+
+Backend:
+
+```bash
+docker compose logs backend
+```
+
+MySQL:
+
+```bash
+docker compose logs mysql
+```
+
+Arquivos persistentes do backend:
+
+```bash
+docker compose exec backend ls -lah /app/log
+```
+
+## Parar os serviços
+
+Para remover os contêineres e preservar os volumes:
+
+```bash
+docker compose down
+```
+
+Para iniciar novamente:
+
+```bash
+docker compose up -d
+```
+
+Os registros do banco e os logs continuarão armazenados.
+
+## Reinicialização completa
+
+Este comando remove também os volumes e todos os dados persistentes:
+
+```bash
+docker compose down -v
+```
+
+Depois, para recriar o ambiente:
+
+```bash
+docker compose up -d --build
+```
+
+`down -v` somente quando for apagar completamente os dados do MySQL e os logs.
+
+## Estrutura
+
+```text
+.
+├── backend
+│   ├── Dockerfile
+│   ├── example.env
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── prisma
+│   │   └── schema.prisma
+│   ├── src
+│   │   ├── app.ts
+│   │   ├── common
+│   │   │   ├── Dotenv.ts
+│   │   │   ├── Formatador.ts
+│   │   │   ├── Logger.ts
+│   │   │   └── ObjectMapper.ts
+│   │   ├── dominio
+│   │   │   ├── dto
+│   │   │   │   ├── LivroDTO.ts
+│   │   │   │   ├── LivroParaAtualizarDTO.ts
+│   │   │   │   └── LivroParaCriarDTO.ts
+│   │   │   ├── excecoes
+│   │   │   │   ├── ErroBase.ts
+│   │   │   │   ├── ISBNUnicoError.ts
+│   │   │   │   ├── RegistroNaoEncontradoError.ts
+│   │   │   │   ├── RegistroNaoSalvoError.ts
+│   │   │   │   └── ValidacaoError.ts
+│   │   │   ├── modelos
+│   │   │   │   └── Livro.ts
+│   │   │   ├── objectmapper
+│   │   │   │   ├── LivroDTOMapper.ts
+│   │   │   │   └── LivroParaCriarMapper.ts
+│   │   │   ├── repositorios
+│   │   │   │   ├── BaseRepository.ts
+│   │   │   │   └── LivrosRepository.ts
+│   │   │   ├── servicos
+│   │   │   │   └── LivrosService.ts
+│   │   │   └── validacoes
+│   │   │       └── ValidadorLivro.ts
+│   │   ├── infraestrutura
+│   │   │   ├── bd
+│   │   │   │   ├── Entidades.ts
+│   │   │   │   ├── index.ts
+│   │   │   │   └── LivroEntityMapper.ts
+│   │   │   ├── controllers
+│   │   │   │   ├── HomeController.ts
+│   │   │   │   └── LivrosController.ts
+│   │   │   ├── middlewares
+│   │   │   │   ├── capturarErro404.ts
+│   │   │   │   ├── capturarExcecoes.ts
+│   │   │   │   └── imprimirLogRequisicoes.ts
+│   │   │   ├── repositorios
+│   │   │   │   └── prisma
+│   │   │   │       └── PrismaLivrosRepository.ts
+│   │   │   └── rotas
+│   │   │       ├── index.ts
+│   │   │       └── livros.ts
+│   │   └── servidor.ts
+│   └── tsconfig.json
+├── bd
+│   ├── 02-dados.sql
+│   ├── dados-livros.txt
+│   └── script.sql
+├── docker-compose.yml
+├── frontend
+│   ├── Dockerfile
+│   ├── env.example
+│   ├── index.html
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── public
+│   │   ├── vite.svg
+│   │   └── webacademylogo.png
+│   ├── src
+│   │   ├── App.tsx
+│   │   ├── assets
+│   │   │   └── react.svg
+│   │   ├── data
+│   │   │   ├── dto
+│   │   │   │   ├── ErroApiDTO.ts
+│   │   │   │   ├── InformacoesApi.ts
+│   │   │   │   ├── LivroDTO.ts
+│   │   │   │   └── TipoErroApiEnum.ts
+│   │   │   ├── hooks
+│   │   │   │   └── useInfosApi.ts
+│   │   │   ├── services
+│   │   │   │   └── ApiService.ts
+│   │   │   └── utils
+│   │   │       └── index.ts
+│   │   ├── main.tsx
+│   │   ├── pages
+│   │   │   ├── FormularioLivroPage.tsx
+│   │   │   ├── ListagemLivrosPage.tsx
+│   │   │   └── VisualizacaoLivroPage.tsx
+│   │   ├── routes.tsx
+│   │   ├── ui
+│   │   │   ├── components
+│   │   │   │   ├── Alerta
+│   │   │   │   │   └── index.tsx
+│   │   │   │   ├── Cabecalho
+│   │   │   │   │   ├── index.style.tsx
+│   │   │   │   │   └── index.tsx
+│   │   │   │   ├── Container
+│   │   │   │   │   ├── index.style.tsx
+│   │   │   │   │   └── index.tsx
+│   │   │   │   ├── ModalDeletarLivro
+│   │   │   │   │   └── index.tsx
+│   │   │   │   ├── Rodape
+│   │   │   │   │   ├── index.style.tsx
+│   │   │   │   │   └── index.tsx
+│   │   │   │   └── TextFieldMask
+│   │   │   │       └── index.tsx
+│   │   │   ├── contexts
+│   │   │   │   ├── alertas.tsx
+│   │   │   │   └── listagem-livros.tsx
+│   │   │   ├── styles
+│   │   │   │   ├── global.css
+│   │   │   │   └── pages
+│   │   │   │       └── LivrosPage.style.tsx
+│   │   │   └── themes
+│   │   │       └── index.ts
+│   │   └── vite-env.d.ts
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+└── README.md
+
+```

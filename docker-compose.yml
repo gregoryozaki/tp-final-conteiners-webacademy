@@ -1,0 +1,81 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: webacademy-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: senhasegura
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_DATABASE: livraria
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./bd/script.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./bd/02-dados.sql:/docker-entrypoint-initdb.d/02-dados.sql:ro
+    networks:
+      - webacademy_network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: webacademy-backend
+    restart: unless-stopped
+    ports:
+      - "4444:4444"
+    volumes:
+      - backend_logs:/app/log
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - webacademy_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: webacademy-frontend
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    depends_on:
+      - backend
+    networks:
+      - webacademy_network
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: webacademy-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: senhasegura
+    ports:
+      - "8080:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - webacademy_network
+
+networks:
+  webacademy_network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  backend_logs:
